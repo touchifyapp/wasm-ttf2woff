@@ -1,0 +1,75 @@
+{
+  "name": "wasm-ttf2woff",
+  "version": "1.0.0",
+  "description": "A WebAssembly module to convert ttf fonts to woff.",
+  "author": "Touchify <dev@touchify.co>",
+  "main": "dist/node/ttf2woff.js",
+  "module": "dist/node/ttf2woff.mjs",
+  "browser": "dist/browser/ttf2woff.min.js",
+  "types": "dist/browser/ttf2woff.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/touchifyapp/wasm-ttf2woff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/touchifyapp/wasm-ttf2woff/issues"
+  },
+  "keywords": [
+    "ttf",
+    "woff",
+    "converter",
+    "browser",
+    "node",
+    "wasm",
+    "webassembly",
+    "javascript",
+    "typescript"
+  ],
+  "files": [
+    "dist/**/*.*",
+    "dist/**/*.*"
+  ],
+  "scripts": {
+    "build": "npm run clean && npm run clean:dist && npm run lint && npm run build:rust && npm run build:rollup",
+    "build:rust": "npm run build:rust:web && npm run build:rust:node",
+    "build:rust:web": "wasm-pack build --target web --out-dir build/browser",
+    "build:rust:node": "wasm-pack build --target nodejs --out-dir build/node",
+    "build:rollup": "rollup -c",
+    "test": "npm run clean && npm run lint && npm run test:jest",
+    "test:jest": "jest",
+    "test:coverage": "npm run test -- -- --coverage",
+    "test:ci": "npm run test:coverage -- --ci",
+    "lint": "npm run lint:ts",
+    "lint:ts": "eslint --ext .ts lib/**/*.ts",
+    "clean": "npm run clean:ts",
+    "clean:ts": "rimraf lib/**/*.{js,d.ts} temp coverage build",
+    "clean:dist": "rimraf dist",
+    "clean:rust": "rimraf target"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^11.0.0",
+    "@commitlint/config-conventional": "^11.0.0",
+    "@rollup/plugin-commonjs": "^16.0.0",
+    "@rollup/plugin-typescript": "^6.1.0",
+    "@types/jest": "^26.0.15",
+    "@types/node": "^12.0.0",
+    "@typescript-eslint/eslint-plugin": "^4.6.1",
+    "@typescript-eslint/parser": "^4.6.1",
+    "eslint": "^7.12.1",
+    "husky": "^4.3.0",
+    "jest": "^26.6.3",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.33.1",
+    "rollup-plugin-cleanup": "^3.2.1",
+    "rollup-plugin-dts": "^1.4.13",
+    "rollup-plugin-terser": "^7.0.2",
+    "ts-jest": "^26.4.3",
+    "typescript": "^4.0.5"
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  }
+}

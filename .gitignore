@@ -1,0 +1,10 @@
+# Build results
+build
+pkg
+target
+lib/**/*.js
+lib/**/*.d.ts
+*.woff
+
+# Dependencies
+node_modules

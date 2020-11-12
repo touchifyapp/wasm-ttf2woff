@@ -6,6 +6,7 @@ lib/**/*.js
 lib/**/*.d.ts
 
 # Test results
+coverage/
 tests/assets/*.html
 *.woff
 

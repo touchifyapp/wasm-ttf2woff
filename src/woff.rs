@@ -24,12 +24,9 @@ pub fn ttf_to_woff(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let sfnt_table_directory = parse_sfnt_table_directory(&ttf_buf, num_tables);
 
     let mut woff_header = WoffHeader::new(num_tables);
-
-    let mut woff_table_directory_buf = prepare_table_buf(&ttf_buf, &sfnt_table_directory, &mut woff_header)?;
-
     let checksum_adjusted = get_checksum_adjustment(&ttf_buf, &sfnt_table_directory);
 
-    let woff_table_data = build_fonts_entries(&ttf_buf, &mut woff_table_directory_buf, &sfnt_table_directory, &mut woff_header, checksum_adjusted);
+    let (woff_table_directory_buf, woff_table_data) = build_woff_table_directory_and_data(&ttf_buf, &sfnt_table_directory, &mut woff_header, checksum_adjusted)?;
 
     let woff_buf = build_woff(&woff_header, &woff_table_directory_buf, &woff_table_data);
 
@@ -63,47 +60,6 @@ fn parse_sfnt_table_directory(ttf_buf: &ByteBuffer, num_tables: u16) -> Vec<Tabl
     return entries;
 }
 
-fn prepare_table_buf(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<TableEntry>, woff_header: &mut WoffHeader) -> Result<ByteBuffer, String> {
-    let num_tables = sfnt_table_directory.len();
-
-    let mut woff_table_directory_buf = ByteBuffer::with_len((num_tables as usize) * SIZEOF_WOFF_ENTRY);
-
-    let mut sfnt_size = SIZEOF_SFNT_HEADER + num_tables * SIZEOF_SFNT_TABLE_ENTRY;
-    for i in 0..num_tables {
-        let sfnt_table_directory_entry = &sfnt_table_directory[i];
-        if sfnt_table_directory_entry.tag_str != "head" {
-            let align_table = ByteBuffer::from_buffer_slice(
-                ttf_buf,
-                sfnt_table_directory_entry.offset as usize,
-                u32_align(sfnt_table_directory_entry.len) as usize,
-            );
-
-            if calc_checksum(&align_table) != sfnt_table_directory_entry.checksum {
-                return Err(format!("Checksum error in {}", sfnt_table_directory_entry.tag));
-            }
-        }
-
-        woff_table_directory_buf.set_u32(
-            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_TAG,
-            sfnt_table_directory_entry.tag.get_u32(0),
-        );
-        woff_table_directory_buf.set_u32(
-            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_LENGTH,
-            sfnt_table_directory_entry.len,
-        );
-        woff_table_directory_buf.set_u32(
-            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_CHECKSUM,
-            sfnt_table_directory_entry.checksum,
-        );
-
-        sfnt_size += usize_align(sfnt_table_directory_entry.len as usize);
-    }
-
-    woff_header.set_sfnt_size(sfnt_size);
-
-    return Ok(woff_table_directory_buf);
-}
-
 fn get_checksum_adjustment(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<TableEntry>) -> u32 {
     let num_tables = sfnt_table_directory.len();
     let mut sfnt_offset = SIZEOF_SFNT_HEADER + num_tables * SIZEOF_SFNT_TABLE_ENTRY;
@@ -132,64 +88,92 @@ fn get_checksum_adjustment(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<Tabl
     return u32_limit(MAGIC_CHECKSUM_ADJUSTMENT - csum) as u32;
 }
 
-fn build_fonts_entries(ttf_buf: &ByteBuffer, woff_table_directory_buf: &mut ByteBuffer, sfnt_table_directory: &Vec<TableEntry>, header: &mut WoffHeader, checksum_adjustment: u32) -> Vec<ByteBuffer> {
+fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<TableEntry>, woff_header: &mut WoffHeader, checksum_adjustment: u32) -> Result<(ByteBuffer, Vec<ByteBuffer>), String> {
     let num_tables = sfnt_table_directory.len();
 
-    let mut offset = SIZEOF_WOFF_HEADER + num_tables * SIZEOF_WOFF_ENTRY;
+    let mut woff_table_directory_buf = ByteBuffer::with_len((num_tables as usize) * SIZEOF_WOFF_ENTRY);
     let mut woff_table_data: Vec<ByteBuffer> = Vec::new();
+
+    let mut sfnt_size = SIZEOF_SFNT_HEADER + num_tables * SIZEOF_SFNT_TABLE_ENTRY;
+    let mut woff_offset = SIZEOF_WOFF_HEADER + num_tables * SIZEOF_WOFF_ENTRY;
 
     for i in 0..num_tables {
         let sfnt_table_directory_entry = &sfnt_table_directory[i];
 
-        let mut font_data = ByteBuffer::from_buffer_slice(
+        let mut sfnt_data_buf = ByteBuffer::from_buffer_slice(
             ttf_buf,
             sfnt_table_directory_entry.offset as usize,
             sfnt_table_directory_entry.len as usize,
         );
 
         if sfnt_table_directory_entry.tag_str == "head" {
-            header.set_head(
-                font_data.get_u16(SFNT_ENTRY_OFFSET_VERSION_MAJ), 
-                font_data.get_u16(SFNT_ENTRY_OFFSET_VERSION_MIN), 
-                font_data.get_u32(SFNT_ENTRY_OFFSET_FLAVOR)
+            woff_header.set_head(
+                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MAJ), 
+                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MIN), 
+                sfnt_data_buf.get_u32(SFNT_ENTRY_OFFSET_FLAVOR)
             );
             
-            font_data.set_u32(SFNT_ENTRY_OFFSET_CHECKSUM_ADJUSTMENT, checksum_adjustment);
+            sfnt_data_buf.set_u32(SFNT_ENTRY_OFFSET_CHECKSUM_ADJUSTMENT, checksum_adjustment);
         } 
+        else {
+            let aligned_table = ByteBuffer::from_buffer_slice(
+                ttf_buf,
+                sfnt_table_directory_entry.offset as usize,
+                u32_align(sfnt_table_directory_entry.len) as usize,
+            );
 
-        let compressed = deflate_bytes_zlib(font_data.to_bytes());
-        // let compressed = deflate_encode(font_data.to_bytes());
+            if calc_checksum(&aligned_table) != sfnt_table_directory_entry.checksum {
+                return Err(format!("Checksum error in {}", sfnt_table_directory_entry.tag));
+            }
+        }
+        
+        let compressed = deflate_bytes_zlib(sfnt_data_buf.to_bytes());
+        // let compressed = deflate_encode(sfnt_data_buf.to_bytes());
 
         // we should use compression only if it really save space (standard requirement).
-        let compressed_len = min(compressed.len(), font_data.len());
+        let compressed_len = min(compressed.len(), sfnt_data_buf.len());
         // also, data should be aligned to long (with zeros?).
         let woff_len = usize_align(compressed_len);
-        let mut woff_data = ByteBuffer::with_len(woff_len);
+        let mut woff_data_buf = ByteBuffer::with_len(woff_len);
 
-        if compressed.len() >= font_data.len() {
-            woff_data.write_bytes(font_data.to_bytes());
+        if compressed.len() >= sfnt_data_buf.len() {
+            woff_data_buf.write_bytes(sfnt_data_buf.to_bytes());
         } else {
-            woff_data.write_bytes(&compressed[..]);
+            woff_data_buf.write_bytes(&compressed[..]);
         }
 
+        
+        woff_table_directory_buf.set_u32(
+            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_TAG,
+            sfnt_table_directory_entry.tag.get_u32(0),
+        );
         woff_table_directory_buf.set_u32(
             i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_OFFSET,
-            offset as u32,
+            woff_offset as u32,
         );
-
-        offset += woff_len;
-
         woff_table_directory_buf.set_u32(
             i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_COMPR_LENGTH,
             compressed_len as u32,
         );
+        woff_table_directory_buf.set_u32(
+            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_LENGTH,
+            sfnt_table_directory_entry.len,
+        );
+        woff_table_directory_buf.set_u32(
+            i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_CHECKSUM,
+            sfnt_table_directory_entry.checksum,
+        );
 
-        woff_table_data.push(woff_data);
+        sfnt_size += usize_align(sfnt_table_directory_entry.len as usize);
+        woff_offset += woff_len;
+
+        woff_table_data.push(woff_data_buf);
     }
 
-    header.set_woff_size(offset);
+    woff_header.set_sfnt_size(sfnt_size);
+    woff_header.set_woff_size(woff_offset);
 
-    return woff_table_data;
+    return Ok((woff_table_directory_buf, woff_table_data));
 }
 
 fn build_woff(woff_header: &WoffHeader, woff_table_directory_buf: &ByteBuffer, woff_table_data: &Vec<ByteBuffer>) -> ByteBuffer {

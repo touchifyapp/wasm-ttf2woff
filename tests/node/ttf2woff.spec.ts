@@ -5,7 +5,6 @@ import { promises as fs } from "fs";
 import * as cheerio from "cheerio";
 
 import { ttf2woff } from "../../dist/node/ttf2woff";
-import { resolve } from "dns";
 
 const SOURCE = path.join(__dirname, "..", "assets", "Montserrat Bold.ttf");
 const DEST = SOURCE.replace(".ttf", ".woff");

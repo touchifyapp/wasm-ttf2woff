@@ -7,8 +7,8 @@ declare type InitInput$1 = InitInput;
  * `init` could be:
  *  - `string`: the path to the WASM.
  *  - `URL`: the parsed URL to the WASM.
- *  - `Request`: a preconfigured Request to the WASM (for `fetch`).
- *  - `Response`: a `fetch` Response wich contains the WASM.
+ *  - `Request`: a `fetch` preconfigured Request to the WASM.
+ *  - `Response`: a `fetch` Response which contains the WASM.
  *  - `ArrayBuffer`: a Buffer which contains the WASM.
  *  - `WebAssembly.Module`: the WASM compiled and instantiated.
  *

@@ -1,8 +1,8 @@
 mod consts;
 mod header;
 
-use std::cmp::min;
 use deflate::deflate_bytes_zlib;
+use std::cmp::min;
 
 use super::bytebuf::ByteBuffer;
 use consts::*;
@@ -23,10 +23,16 @@ pub fn ttf_to_woff(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let num_tables = ttf_buf.get_u16(TTF_OFFSET_NUM_TABLES);
     let sfnt_table_directory = parse_sfnt_table_directory(&ttf_buf, num_tables);
 
-    let mut woff_header = WoffHeader::new(num_tables);
     let checksum_adjusted = get_checksum_adjustment(&ttf_buf, &sfnt_table_directory);
+    
+    let mut woff_header = WoffHeader::new(num_tables);
 
-    let (woff_table_directory_buf, woff_table_data) = build_woff_table_directory_and_data(&ttf_buf, &sfnt_table_directory, &mut woff_header, checksum_adjusted)?;
+    let (woff_table_directory_buf, woff_table_data) = build_woff_table_directory_and_data(
+        &ttf_buf,
+        &sfnt_table_directory,
+        &mut woff_header,
+        checksum_adjusted,
+    )?;
 
     let woff_buf = build_woff(&woff_header, &woff_table_directory_buf, &woff_table_data);
 
@@ -79,7 +85,7 @@ fn get_checksum_adjustment(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<Tabl
         check_buf.set_u32(SFNT_OFFSET_OFFSET, sfnt_offset as u32);
         check_buf.set_u32(SFNT_OFFSET_LENGTH, sfnt_table_directory_entry.len);
 
-        sfnt_offset += usize_align(sfnt_table_directory_entry.len as usize);
+        sfnt_offset += four_byte_align(sfnt_table_directory_entry.len as usize);
 
         csum += calc_checksum(&check_buf) as usize;
         csum += sfnt_table_directory_entry.checksum as usize;
@@ -88,7 +94,12 @@ fn get_checksum_adjustment(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<Tabl
     return u32_limit(MAGIC_CHECKSUM_ADJUSTMENT - csum) as u32;
 }
 
-fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_directory: &Vec<TableEntry>, woff_header: &mut WoffHeader, checksum_adjustment: u32) -> Result<(ByteBuffer, Vec<ByteBuffer>), String> {
+fn build_woff_table_directory_and_data(
+    ttf_buf: &ByteBuffer,
+    sfnt_table_directory: &Vec<TableEntry>,
+    woff_header: &mut WoffHeader,
+    checksum_adjustment: u32,
+) -> Result<(ByteBuffer, Vec<ByteBuffer>), String> {
     let num_tables = sfnt_table_directory.len();
 
     let mut woff_table_directory_buf = ByteBuffer::with_len((num_tables as usize) * SIZEOF_WOFF_ENTRY);
@@ -108,32 +119,33 @@ fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_director
 
         if sfnt_table_directory_entry.tag_str == "head" {
             woff_header.set_head(
-                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MAJ), 
-                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MIN), 
-                sfnt_data_buf.get_u32(SFNT_ENTRY_OFFSET_FLAVOR)
+                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MAJ),
+                sfnt_data_buf.get_u16(SFNT_ENTRY_OFFSET_VERSION_MIN),
+                sfnt_data_buf.get_u32(SFNT_ENTRY_OFFSET_FLAVOR),
             );
-            
+
             sfnt_data_buf.set_u32(SFNT_ENTRY_OFFSET_CHECKSUM_ADJUSTMENT, checksum_adjustment);
-        } 
-        else {
+        } else {
             let aligned_table = ByteBuffer::from_buffer_slice(
                 ttf_buf,
                 sfnt_table_directory_entry.offset as usize,
-                u32_align(sfnt_table_directory_entry.len) as usize,
+                four_byte_align(sfnt_table_directory_entry.len as usize),
             );
 
             if calc_checksum(&aligned_table) != sfnt_table_directory_entry.checksum {
-                return Err(format!("Checksum error in {}", sfnt_table_directory_entry.tag));
+                return Err(format!(
+                    "checksum error in {}",
+                    sfnt_table_directory_entry.tag
+                ));
             }
         }
-        
+
         let compressed = deflate_bytes_zlib(sfnt_data_buf.to_bytes());
-        // let compressed = deflate_encode(sfnt_data_buf.to_bytes());
 
         // we should use compression only if it really save space (standard requirement).
         let compressed_len = min(compressed.len(), sfnt_data_buf.len());
         // also, data should be aligned to long (with zeros?).
-        let woff_len = usize_align(compressed_len);
+        let woff_len = four_byte_align(compressed_len);
         let mut woff_data_buf = ByteBuffer::with_len(woff_len);
 
         if compressed.len() >= sfnt_data_buf.len() {
@@ -142,7 +154,6 @@ fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_director
             woff_data_buf.write_bytes(&compressed[..]);
         }
 
-        
         woff_table_directory_buf.set_u32(
             i * SIZEOF_WOFF_ENTRY + WOFF_ENTRY_OFFSET_TAG,
             sfnt_table_directory_entry.tag.get_u32(0),
@@ -164,7 +175,7 @@ fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_director
             sfnt_table_directory_entry.checksum,
         );
 
-        sfnt_size += usize_align(sfnt_table_directory_entry.len as usize);
+        sfnt_size += four_byte_align(sfnt_table_directory_entry.len as usize);
         woff_offset += woff_len;
 
         woff_table_data.push(woff_data_buf);
@@ -176,7 +187,11 @@ fn build_woff_table_directory_and_data(ttf_buf: &ByteBuffer, sfnt_table_director
     return Ok((woff_table_directory_buf, woff_table_data));
 }
 
-fn build_woff(woff_header: &WoffHeader, woff_table_directory_buf: &ByteBuffer, woff_table_data: &Vec<ByteBuffer>) -> ByteBuffer {
+fn build_woff(
+    woff_header: &WoffHeader,
+    woff_table_directory_buf: &ByteBuffer,
+    woff_table_data: &Vec<ByteBuffer>,
+) -> ByteBuffer {
     let mut woff_buf = ByteBuffer::with_len(woff_header.get_woff_size());
 
     woff_buf.write_bytes(woff_header.to_buffer().to_bytes());
@@ -211,11 +226,7 @@ fn u32_limit(t: usize) -> usize {
     return res as usize;
 }
 
-fn u32_align(n: u32) -> u32 {
-    return (((n as i32) + 3) & -4) as u32;
-}
-
-fn usize_align(n: usize) -> usize {
+fn four_byte_align(n: usize) -> usize {
     return (((n as i64) + 3) & -4) as usize;
 }
 

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>[ttf2woff] WebAssembly module to convert TTF to WOFF</title>
+    <style type="text/css">
+      body { font-family: sans-serif; }
+      label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
+      .form { margin: 3rem 0; }
+      .form-group { margin: 1rem 0; }
+      .button { padding: 0.5rem 2rem; background: #ccc; border: solid 1px #aaa; border-radius: 5px; }
+      .button-upload { padding: 0.5rem; background: #efefef; border-radius: 5px; cursor: pointer; }
+      .preview { background: #f5f5f5; padding: 1rem; margin: 1rem 0; }
+      .report { background: #f5f5f5; padding: 1rem; margin: 1rem 0; }
+      .report > pre { min-height: 100px; background: white; }
+    </style>
+    <style id="font-css" type="text/css"></style>
+  </head>
+  <body>
+    <section>
+      <h1>[ttf2woff]</h1>
+      <h2>WebAssembly module to convert TTF to WOFF</h2>
+
+      <div class="form">
+        <h3>Generate font</h3>
+        <div class="form-group">
+          <label>Select a TTF file:</label>
+          <input type="file" id="ttf-file" class="button-upload">
+        </div>
+
+        <div class="form-group">
+          <button class="button" id="run-convert">Convert</button>
+          <button class="button" id="save-file">Save</button>
+        </div>
+      </div>
+
+      <div class="preview">
+        <h3>Preview generated font</h3>
+        <p style="font-family: GeneratedWOFF">
+          abcdefghijklmnopqrstuvwxyz<br>
+          ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        </p>
+      </div>
+
+      <div class="report">
+        <h3>Report</h3>
+        <pre id="report"></pre>
+      </div>
+    </section>
+
+    <script src="../../dist/browser/ttf2woff.js"></script>
+    <script>
+      let font;
+
+      document.getElementById("run-convert").addEventListener("click", onConvert);
+      document.getElementById("save-file").addEventListener("click", onSave);
+
+      async function onConvert() {
+        console.time("full");
+
+        console.time("build uint8array");
+        const [file] = document.getElementById("ttf-file").files;
+        const source = await getUint8Array(file);
+        console.timeEnd("build uint8array");
+
+        console.time("init wasm");
+        await ttf2woff.init("../../dist/browser/ttf2woff.wasm");
+        console.timeEnd("init wasm");
+
+        console.time("generate_woff");
+        const dest = await ttf2woff.ttf2woff(source);
+        console.timeEnd("generate_woff");
+
+        console.timeEnd("full");
+
+        buildReport(source, dest);
+        
+        const woff = new Blob([dest], { type: "font/woff" });
+        generateCss(woff);
+      }
+
+      function onSave() {
+
+      }
+
+      function generateCss(font) {
+        const url = URL.createObjectURL(font);
+        const css = `@font-face { font-family: "GeneratedWOFF"; src: url("${url}") format("woff"); }`;
+
+        const style = document.getElementById("font-css");
+        style.textContent = css;
+      }
+              
+      function buildReport(source, dest) {
+        document.getElementById("report").innerHTML = [
+          `source length: ${fileSize(source.length)}`,
+          `dest length:   ${fileSize(dest.length)}`,
+          `ratio:         ${dest.length / source.length * 100}%`,
+        ].join("\n");
+      }
+
+      async function getUint8Array(blob) {
+          const buffer = await blob.arrayBuffer();
+          return new Uint8Array(buffer);
+      }
+
+      function fileSize(size) {
+        const i = Math.floor(Math.log(size) / Math.log(1024));
+        return (size / Math.pow(1024, i)).toFixed(2) * 1 + " " + ["B", "kB", "MB", "GB", "TB"][i];
+      }
+    </script>
+  </body>
+</html>

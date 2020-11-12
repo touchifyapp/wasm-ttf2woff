@@ -5,8 +5,7 @@ module.exports = {
         "<rootDir>/tests/**/*.spec.ts"
     ],
     collectCoverageFrom: [
-      "*.ts",
-      "lib/**/*.ts"
+      "dist/**/ttf2woff.js"
     ],
     globals: {
       "ts-jest": {

@@ -1,7 +1,8 @@
 # wasm-ttf2woff
-[![NPM version](https://img.shields.io/npm/v/promizr.svg)](https://npmjs.org/package/wasm-ttf2woff)
+[![NPM version](https://img.shields.io/npm/v/wasm-ttf2woff.svg)](https://npmjs.org/package/wasm-ttf2woff)
 [![Unit Tests](https://github.com/touchifyapp/wasm-ttf2woff/workflows/Unit%20Tests/badge.svg)](https://github.com/touchifyapp/wasm-ttf2woff/actions?query=workflow%3A%22Unit+Tests%22)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](http://opensource.org/licenses/MIT)
+[![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
 
 `wasm-ttf2woff` is an utility that converts TTF/OTF fonts to WOFF format.
 

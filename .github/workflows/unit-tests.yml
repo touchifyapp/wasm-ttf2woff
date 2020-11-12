@@ -1,0 +1,45 @@
+name: Unit Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [10.x, 12.x]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Setup Rust
+      uses: raftario/setup-rust-action@v1
+      with:
+        rust-channel: stable
+        rust-host: wasm-unknown-unknown
+
+    - name: Setup wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      
+    - name: Setup python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 2.x
+        architecture: x64
+
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build package
+      run: npm run build
+    
+    - name: Run unit tests
+      run: npm run test:ci
+      env:
+        CI: true

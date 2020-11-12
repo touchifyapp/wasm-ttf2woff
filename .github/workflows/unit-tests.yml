@@ -20,9 +20,6 @@ jobs:
 
     - name: Setup Rust
       uses: raftario/setup-rust-action@v1
-      with:
-        rust-channel: stable
-        rust-host: wasm-unknown-unknown
 
     - name: Setup wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh

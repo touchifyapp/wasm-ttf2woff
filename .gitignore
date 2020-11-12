@@ -4,6 +4,9 @@ pkg
 target
 lib/**/*.js
 lib/**/*.d.ts
+
+# Test results
+tests/assets/*.html
 *.woff
 
 # Dependencies

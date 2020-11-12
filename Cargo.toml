@@ -28,7 +28,7 @@ wee_alloc = { version = "0.4.5", optional = true }
 wasm-bindgen-test = "0.3.13"
 
 [profile.release]
-#lto = true
+lto = true
 opt-level = "s" # Tell `rustc` to optimize for small code size.
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
